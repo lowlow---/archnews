@@ -450,7 +450,7 @@ YYYY-mm-dd format: news released before given date
         dest='since')
 
     parser.add_argument(
-        '-g', '--grep', help='''show only news that has given string in title or description
+        '-g', '--grep', nargs='+', help='''show only news that has given string in title or description
 (search is case-insensitive)''',
         dest='grep')
 
@@ -534,51 +534,57 @@ def main(args):
     result_code = 0
 
     if args.stdin:
-        items = FeedParser.parse_feed(sys.stdin)
+        unfiltered_items = FeedParser.parse_feed(sys.stdin)
     else:
         try:
             http_request = request.urlopen(FEED_URL)
         except request.URLError:
             print('Error when trying to fetch Arch Feed News :-(')
             return 1
-        items = FeedParser.parse_feed(http_request)
+        unfiltered_items = FeedParser.parse_feed(http_request)
 
     # Set wrap according parameters.
     Wrap.set(args.wrap_size)
 
     # Set color output.
     Out.set(args.colorize_output)
-    if args.grep:
-        Out.highlight_word = args.grep
 
     # Set default locale ('' is for the system locale, otherwise
     # e.g. 'cs_CZ.UTF-8' can be used).
     locale.setlocale(locale.LC_ALL, args.locale)
 
-    items = filter_pipe(items, args)
+    def print_results(items, args, Warp, Out):
+        # Print results.
+        # Set correct order.
+        if args.order:
+            # Reverse the array. (Note to myself: Function `reversed` cannot
+            # be used, it returns iterator that cannot be indexed.)
+            items = items[::-1]
+        if items:
+            newest_time = items[0].time
+            for item in items:
+                newest_time = max(item.time, newest_time)
+                item.print(Wrap.wrap, print_body=(not args.brief_mode))
+                if item == items[-1] or args.brief_mode:
+                    print()
+                else:
+                    print('\n\n')
+            return 0
+        else:
+            Out.print('super_white', 'No news to display.', file=sys.stderr)
+            return 1
 
-    # Set correct order.
-    if args.order:
-        # Reverse the array. (Note to myself: Function `reversed` cannot
-        # be used, it returns iterator that cannot be indexed.)
-        items = items[::-1]
-
-    # Print results.
-    if items:
-        newest_time = items[0].time
-
-        for item in items:
-            newest_time = max(item.time, newest_time)
-
-            item.print(Wrap.wrap, print_body=(not args.brief_mode))
-            if item == items[-1] or args.brief_mode:
-                print()
-            else:
-                print('\n\n')
+    if args.grep:
+        greps = args.grep
+        for g in greps:
+            Out.highlight_word = g
+            args.grep = g
+            items = filter_pipe(unfiltered_items, args)
+            result_code = print_results(items, args, Wrap, Out)
     else:
-        Out.print('super_white', 'No news to display.', file=sys.stderr)
-        result_code = 1
-
+        items = filter_pipe(unfiltered_items, args)
+        result_code = print_results(items, args, Wrap, Out)
+            
     if args.unread and items:
         if args.yes:
             user_input = 'y'
