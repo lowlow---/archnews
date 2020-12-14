@@ -564,6 +564,9 @@ def main(args):
             newest_time = items[0].time
             for item in items:
                 newest_time = max(item.time, newest_time)
+                Out.highlight_word = ""
+                Out.print('super_white', '## ' + args.grep)
+                Out.highlight_word = args.grep
                 item.print(Wrap.wrap, print_body=(not args.brief_mode))
                 if item == items[-1] or args.brief_mode:
                     print()
@@ -577,8 +580,8 @@ def main(args):
     if args.grep:
         greps = args.grep
         for g in greps:
-            Out.highlight_word = g
             args.grep = g
+
             items = filter_pipe(unfiltered_items, args)
             result_code = print_results(items, args, Wrap, Out)
     else:
